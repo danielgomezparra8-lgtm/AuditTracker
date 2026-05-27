@@ -1180,25 +1180,105 @@
             
             const saveTeamConfig = async () => {
                 const newPasswords = {};
-                editingSeniors.value.forEach(s => {
-                    if (s.newName.trim()) newPasswords[s.newName.trim()] = s.pwd;
-                });
-                seniorPasswords.value = newPasswords;
+                const seniorNameChanges = {}; // Rastrea cambios de Seniors
                 
-                const newStaffList = editingStaff.value.map(s => s.newName.trim()).filter(Boolean);
+                editingSeniors.value.forEach(s => {
+                    const trimmedNew = s.newName.trim();
+                    if (trimmedNew) {
+                        newPasswords[trimmedNew] = s.pwd;
+                        if (s.oldName && s.oldName !== trimmedNew) {
+                            seniorNameChanges[s.oldName] = trimmedNew;
+                        }
+                    }
+                });
+
+                const newStaffList = [];
+                const staffNameChanges = {}; // Rastrea cambios de Staff
+                
+                editingStaff.value.forEach(s => {
+                    const trimmedNew = s.newName.trim();
+                    if (trimmedNew) {
+                        newStaffList.push(trimmedNew);
+                        if (s.oldName && s.oldName !== trimmedNew) {
+                            staffNameChanges[s.oldName] = trimmedNew;
+                        }
+                    }
+                });
+
+                // Actualizar de inmediato los estados reactivos de la aplicación
+                seniorPasswords.value = newPasswords;
                 staffList.value = newStaffList.length > 0 ? newStaffList : ['Asistente A'];
                 
-                if (!staffList.value.includes(selectedStaff.value)) {
-                    selectedStaff.value = staffList.value[0];
+                if (activeSenior.value && seniorNameChanges[activeSenior.value]) {
+                    activeSenior.value = seniorNameChanges[activeSenior.value];
                 }
 
+                // --- PROCESO PROFUNDO DE MIGRACIÓN DE ACTIVIDADES ---
+                const currentDbData = { ...dbData.value };
+
+                // 1. Migrar documentos de asignaciones por cambio de nombre de Staff
+                for (const oldStaff of Object.keys(staffNameChanges)) {
+                    const newStaff = staffNameChanges[oldStaff];
+                    for (const key of Object.keys(currentDbData)) {
+                        if (key.endsWith(`_${oldStaff}`)) {
+                            const datePart = key.split('_')[0];
+                            const newKey = `${datePart}_${newStaff}`;
+                            
+                            // Re-mapear firmas internas de Senior dentro del archivo si aplica
+                            let acts = [...currentDbData[key]];
+                            acts = acts.map(act => {
+                                if (act.assignedBy && seniorNameChanges[act.assignedBy]) {
+                                    act.assignedBy = seniorNameChanges[act.assignedBy];
+                                }
+                                return act;
+                            });
+
+                            // Almacenar en la nueva ubicación de la base de datos
+                            await saveDayData(newKey, acts);
+                            
+                            // Eliminar el registro antiguo en la nube para evitar duplicidades
+                            if (syncStatus.value === 'online') {
+                                const oldDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'activities', key);
+                                await deleteDoc(oldDocRef).catch(()=>{});
+                            }
+                            delete currentDbData[key];
+                        }
+                    }
+                }
+
+                // 2. Migrar firmas de Senior en los documentos que mantuvieron el mismo Staff
+                for (const key of Object.keys(currentDbData)) {
+                    let hasChanges = false;
+                    const acts = currentDbData[key].map(act => {
+                        if (act.assignedBy && seniorNameChanges[act.assignedBy]) {
+                            act.assignedBy = seniorNameChanges[act.assignedBy];
+                            hasChanges = true;
+                        }
+                        return act;
+                    });
+                    if (hasChanges) {
+                        await saveDayData(key, acts);
+                    }
+                }
+
+                // Guardar de forma persistente la configuración de nombres en Firebase
                 try {
-                    const authDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'auth_passwords');
-                    await setDoc(authDocRef, { passwords: seniorPasswords.value });
-                } catch(e) {}
+                    const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'team_configuration');
+                    await setDoc(configDocRef, { 
+                        passwords: seniorPasswords.value, 
+                        staff: staffList.value 
+                    });
+                } catch(e) {
+                    console.error("Error guardando configuración de equipo:", e);
+                }
+
+                // Ajustar el selector visual de la barra superior
+                if (!staffList.value.includes(selectedStaff.value)) {
+                    selectedStaff.value = staffNameChanges[selectedStaff.value] || staffList.value[0];
+                }
                 
                 teamConfigModalOpen.value = false;
-                showToast("Equipo guardado");
+                showToast("Estructura de equipo actualizada y actividades migradas con éxito.");
             };
 
             // Analytics...
@@ -1273,7 +1353,24 @@
                     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await signInWithCustomToken(auth, __initial_auth_token);
                     else await signInAnonymously(auth);
                 } catch (err) {}
-                await setupRealtimeSync(); // Fetch global
+                
+                // Consultar y restaurar la configuración guardada del equipo
+                try {
+                    const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'team_configuration');
+                    const configSnap = await getDoc(configDocRef);
+                    if (configSnap.exists()) {
+                        const cData = configSnap.data();
+                        if (cData.passwords) seniorPasswords.value = cData.passwords;
+                        if (cData.staff && cData.staff.length > 0) {
+                            staffList.value = cData.staff;
+                            selectedStaff.value = cData.staff[0];
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error al recuperar la configuración inicial del equipo:", e);
+                }
+
+                await setupRealtimeSync(); // Sincronización en tiempo real de actividades
                 boardForm.value.date = getSelectedDateKey();
             });
 
