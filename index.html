@@ -1022,73 +1022,74 @@
                     const currentKey = `${getSelectedDateKey()}_${selectedStaff.value}`;
                     let currentActs = dbData.value[currentKey] ? [...dbData.value[currentKey]] : [];
                     
-                    // 1. Identificar tareas a mover (las del Senior actual)
-                    let tasksToMove = currentActs.filter(a => !a.completed && !a.rolledOver && !a.frozen && a.assignedBy === activeSenior.value);
+                    // 1. Identificar tareas a mover (Fijado: usamos 't' correctamente)
+                    let tasksToMove = currentActs.filter(t => !t.completed && !t.rolledOver && !t.frozen && t.assignedBy === activeSenior.value);
+                    
+                    if(tasksToMove.length === 0) {
+                        showToast("No hay tareas para reprogramar.");
+                        isProcessingRollover.value = false; return;
+                    }
                     
                     // 2. Marcar originales como movidas
                     currentActs = currentActs.map(t => {
-                        if(!t.completed && !t.rolledOver && !t.frozen && a.assignedBy === activeSenior.value) {
+                        if(!t.completed && !t.rolledOver && !t.frozen && t.assignedBy === activeSenior.value) {
                             return { ...t, rolledOver: true, deviationReason: "Reprogramada al siguiente día." };
                         }
                         return t;
                     });
                     await saveDayData(currentKey, currentActs);
 
-                    // 3. Cola de tareas: primero las que elegiste (integras), luego las que se desplacen
-                    let pendingTasks = tasksToMove.map(t => ({
-                        ...t, 
-                        id: Date.now() + Math.random(), 
-                        originalId: t.originalId || t.id,
-                        rolledOver: false
-                    }));
+                    // 3. Cola de tareas (Las que elegiste tienen prioridad)
+                    let pendingTasks = tasksToMove.map(t => ({...t, id: Date.now() + Math.random(), originalId: t.originalId || t.id, rolledOver: false}));
 
                     let iterDate = getNextValidDate(currentYear.value, currentMonth.value, selectedDay.value);
-                    let maxLoops = 30; // Evitar bucles infinitos
+                    let maxLoops = 30;
 
                     while (pendingTasks.length > 0 && maxLoops > 0) {
                         maxLoops--;
                         let iterKey = `${iterDate.getFullYear()}-${String(iterDate.getMonth()+1).padStart(2,'0')}-${String(iterDate.getDate()).padStart(2,'0')}_${selectedStaff.value}`;
                         let dayActs = dbData.value[iterKey] ? [...dbData.value[iterKey]] : [];
                         
+                        // Añadimos las tareas que vienen en cascada
+                        dayActs.push(...pendingTasks);
+                        pendingTasks = [];
+                        
+                        // Recalculamos horas
                         let currentDayHours = dayActs.reduce((sum, a) => sum + (a.plannedHours || 0), 0);
-                        let nextDayPending = []; // Tareas que se desplazan de este día al siguiente
-
-                        // Procesamos la cola
-                        while (pendingTasks.length > 0) {
-                            let task = pendingTasks.shift();
-                            let spaceAvailable = 8 - currentDayHours;
-
-                            if (spaceAvailable >= task.plannedHours) {
-                                // Caso A: Cabe completa en el día
-                                dayActs.push(task);
-                                currentDayHours += task.plannedHours;
-                            } else if (spaceAvailable > 0) {
-                                // Caso B: Corte Fraccionario (Llenamos a 8h y el resto al siguiente)
-                                let partToKeep = spaceAvailable;
-                                let partToPush = task.plannedHours - spaceAvailable;
+                        
+                        // Si nos pasamos de 8 horas, empezamos a "recortar" desde el final
+                        while (currentDayHours > 8 && dayActs.length > 0) {
+                            let lastIdx = dayActs.length - 1;
+                            let lastTask = dayActs[lastIdx];
+                            let excess = currentDayHours - 8;
+                            
+                            // Si la última tarea es más grande que el exceso, la cortamos
+                            if (lastTask.plannedHours > excess) {
+                                let partToPush = excess;
+                                lastTask.plannedHours -= partToPush;
                                 
-                                dayActs.push({...task, plannedHours: partToKeep, splitText: `Fracción: ${partToKeep}h`});
-                                
-                                // El resto se convierte en una nueva tarea para la siguiente iteración
-                                nextDayPending.push({...task, plannedHours: partToPush, id: Date.now() + Math.random()});
+                                // Creamos el clon del residuo para el siguiente día
+                                pendingTasks.push({...lastTask, id: Date.now() + Math.random(), plannedHours: partToPush, splitText: `Fracción: ${partToPush}h`});
                                 currentDayHours = 8;
                             } else {
-                                // Caso C: El día está lleno, pasa completa al siguiente
-                                nextDayPending.push(task);
+                                // Si la tarea entera es menor o igual al exceso, la movemos toda al siguiente
+                                let popped = dayActs.pop();
+                                currentDayHours -= popped.plannedHours;
+                                pendingTasks.push(popped);
                             }
                         }
-
-                        // Guardamos el día procesado
+                        
                         await saveDayData(iterKey, dayActs);
                         
-                        // Si quedaron tareas, preparamos el siguiente día
-                        pendingTasks = nextDayPending;
                         if (pendingTasks.length > 0) {
                             iterDate = getNextValidDate(iterDate.getFullYear(), iterDate.getMonth(), iterDate.getDate());
                         }
                     }
-                    showToast("Cascada completada: Horas repartidas respetando las 8h diarias.");
-                } catch (e) { showToast("Error en cascada.", "error"); }
+                    showToast("Cascada ajustada: Reprogramadas sin desbordar el plan.");
+                } catch (e) { 
+                    console.error(e);
+                    showToast("Error en cascada.", "error"); 
+                }
                 isProcessingRollover.value = false;
             };
 
