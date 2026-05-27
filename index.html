@@ -1160,10 +1160,13 @@
                 }
                 seniorPasswords.value[activeSenior.value] = changePwdForm.value.newPassword;
                 try {
-                    const authDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'auth_passwords');
-                    await setDoc(authDocRef, { passwords: seniorPasswords.value }, { merge: true });
+                    // CORREGIDO: Ahora apunta a 'team_configuration' con merge: true para no borrar los Staff
+                    const configDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'team_configuration');
+                    await setDoc(configDocRef, { passwords: seniorPasswords.value }, { merge: true });
+                    
                     showToast("Contraseña actualizada con éxito");
                     changePwdModalOpen.value = false;
+                    changePwdForm.value = { newPassword: '', confirmPassword: '' }; // Limpiar campos
                 } catch (e) {
                     showToast("Error al guardar contraseña", "error");
                 }
