@@ -1055,16 +1055,40 @@
                         
                         let activePlannedSum = iterActs.reduce((sum, a) => sum + (!a.rolledOver ? (a.plannedHours || 0) : 0), 0);
                         while(activePlannedSum > 8 && iterActs.length > 1) {
-                            let lastPendingIdx = -1;
-                            for (let i = iterActs.length - 1; i >= 0; i--) {
-                                if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
-                            }
-                            if (lastPendingIdx !== -1) {
+                        let lastPendingIdx = -1;
+                        for (let i = iterActs.length - 1; i >= 0; i--) {
+                            if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
+                        }
+                        
+                        if (lastPendingIdx !== -1) {
+                            let overflow = activePlannedSum - 8; // Calculamos cuántas horas sobran
+                            let targetTask = iterActs[lastPendingIdx];
+
+                            if (targetTask.plannedHours > overflow) {
+                                // CASO A: Fraccionar la actividad
+                                let pushedTask = {
+                                    ...targetTask,
+                                    id: Date.now() + Math.floor(Math.random() * 10000), // Nuevo ID único
+                                    plannedHours: overflow, // Se lleva solo las horas sobrantes
+                                    actualHours: 0,
+                                    deviationReason: (targetTask.deviationReason ? targetTask.deviationReason + " | " : "") + "Dividida y desplazada (efecto cascada)."
+                                };
+                                
+                                // Reducimos las horas de la tarea original en el día actual
+                                targetTask.plannedHours -= overflow;
+                                targetTask.deviationReason = (targetTask.deviationReason ? targetTask.deviationReason + " | " : "") + `Se fraccionaron ${overflow}h al sig. día.`;
+                                
+                                activePlannedSum = 8; // El día queda cuadrado exactamente en 8 horas
+                                tasksToPush.unshift(pushedTask);
+                            } else {
+                                // CASO B: Pasar la actividad completa (es menor o igual al desborde)
                                 let popped = iterActs.splice(lastPendingIdx, 1)[0];
                                 activePlannedSum -= (popped.plannedHours || 0);
+                                popped.deviationReason = (popped.deviationReason ? popped.deviationReason + " | " : "") + "Desplazada completa (efecto cascada).";
                                 tasksToPush.unshift(popped); 
-                            } else break;
-                        }
+                            }
+                        } else break;
+                    }
                         await saveDayData(iterKey, iterActs);
                         if (tasksToPush.length > 0) iterDate = getNextValidDate(iterDate.getFullYear(), iterDate.getMonth(), iterDate.getDate());
                     }
@@ -1106,12 +1130,34 @@
                         let activePlannedSum = iterActs.reduce((sum, a) => sum + (!a.rolledOver ? (a.plannedHours || 0) : 0), 0);
                         
                         while (activePlannedSum > 8 && iterActs.length > 1) {
-                            let lastPendingIdx = -1;
-                            for (let i = iterActs.length - 1; i >= 0; i--) {
-                                if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
-                            }
-                            if (lastPendingIdx !== -1) {
-                                let isToday = (iterKey === `${getSelectedDateKey()}_${selectedStaff.value}`);
+                        let lastPendingIdx = -1;
+                        for (let i = iterActs.length - 1; i >= 0; i--) {
+                            if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
+                        }
+                        
+                        if (lastPendingIdx !== -1) {
+                            let isToday = (iterKey === `${getSelectedDateKey()}_${selectedStaff.value}`);
+                            let overflow = activePlannedSum - 8;
+                            let targetTask = iterActs[lastPendingIdx];
+
+                            if (targetTask.plannedHours > overflow) {
+                                // Fraccionar la actividad
+                                let pushedTask = {
+                                    ...targetTask,
+                                    id: Date.now() + Math.floor(Math.random()*10000),
+                                    plannedHours: overflow,
+                                    actualHours: 0,
+                                    completed: false, rolledOver: false, frozen: false,
+                                    deviationReason: `[Desplazada - Fraccionada] ` + (targetTask.deviationReason || '')
+                                };
+                                
+                                targetTask.plannedHours -= overflow;
+                                targetTask.deviationReason = (targetTask.deviationReason ? targetTask.deviationReason + " | " : "") + `Se pasaron ${overflow}h al sig. día.`;
+                                
+                                activePlannedSum = 8; 
+                                tasksToPush.unshift(pushedTask);
+                            } else {
+                                // Pasar la actividad completa
                                 let popped;
                                 if (isToday) {
                                     popped = { ...iterActs[lastPendingIdx] };
@@ -1121,9 +1167,16 @@
                                     popped = iterActs.splice(lastPendingIdx, 1)[0];
                                 }
                                 activePlannedSum -= (popped.plannedHours || 0);
-                                tasksToPush.unshift({ ...popped, id: Date.now() + Math.floor(Math.random()*10000), plannedHours: Math.max(0, (popped.plannedHours || 0) - (popped.actualHours || 0)), actualHours: 0, completed: false, rolledOver: false, frozen: false, deviationReason: `[Desplazada] ` + (popped.deviationReason || '') });
-                            } else break;
-                        }
+                                tasksToPush.unshift({ 
+                                    ...popped, 
+                                    id: Date.now() + Math.floor(Math.random()*10000), 
+                                    plannedHours: Math.max(0, (popped.plannedHours || 0) - (popped.actualHours || 0)), 
+                                    actualHours: 0, completed: false, rolledOver: false, frozen: false, 
+                                    deviationReason: `[Desplazada] ` + (popped.deviationReason || '') 
+                                });
+                            }
+                        } else break;
+                    }
                         await saveDayData(iterKey, iterActs);
                         if (tasksToPush.length > 0) iterDate = getNextValidDate(iterDate.getFullYear(), iterDate.getMonth(), iterDate.getDate());
                     }
