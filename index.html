@@ -1022,7 +1022,7 @@
                     const currentKey = `${getSelectedDateKey()}_${selectedStaff.value}`;
                     let currentActs = dbData.value[currentKey] ? [...dbData.value[currentKey]] : [];
                     
-                    // 1. Identificar tareas a mover (Fijado: usamos 't' correctamente)
+                    // 1. Identificar tareas a mover
                     let tasksToMove = currentActs.filter(t => !t.completed && !t.rolledOver && !t.frozen && t.assignedBy === activeSenior.value);
                     
                     if(tasksToMove.length === 0) {
@@ -1033,46 +1033,46 @@
                     // 2. Marcar originales como movidas
                     currentActs = currentActs.map(t => {
                         if(!t.completed && !t.rolledOver && !t.frozen && t.assignedBy === activeSenior.value) {
-                            return { ...t, rolledOver: true, deviationReason: "Reprogramada al siguiente día." };
+                            return { ...t, rolledOver: true, deviationReason: "Cascada secuencial." };
                         }
                         return t;
                     });
                     await saveDayData(currentKey, currentActs);
 
-                    // 3. Cola de tareas (Las que elegiste tienen prioridad)
+                    // 3. Cola inicial de tareas (las que tú eliges)
                     let pendingTasks = tasksToMove.map(t => ({...t, id: Date.now() + Math.random(), originalId: t.originalId || t.id, rolledOver: false}));
 
-                    let iterDate = getNextValidDate(currentYear.value, currentMonth.value, selectedDay.value);
-                    let maxLoops = 30;
+                    // 4. Iniciar desde el día siguiente al actual, sin saltos
+                    let iterDate = new Date(currentYear.value, currentMonth.value - 1, selectedDay.value);
+                    iterDate.setDate(iterDate.getDate() + 1); // Empezar en día + 1
 
-                    while (pendingTasks.length > 0 && maxLoops > 0) {
-                        maxLoops--;
+                    let maxDays = 30; // Límite de seguridad
+                    while (pendingTasks.length > 0 && maxDays > 0) {
+                        maxDays--;
                         let iterKey = `${iterDate.getFullYear()}-${String(iterDate.getMonth()+1).padStart(2,'0')}-${String(iterDate.getDate()).padStart(2,'0')}_${selectedStaff.value}`;
                         let dayActs = dbData.value[iterKey] ? [...dbData.value[iterKey]] : [];
                         
-                        // Añadimos las tareas que vienen en cascada
+                        // Añadir tareas pendientes a este día
                         dayActs.push(...pendingTasks);
-                        pendingTasks = [];
+                        pendingTasks = []; // Limpiar para el siguiente ciclo
                         
-                        // Recalculamos horas
+                        // Recalcular horas
                         let currentDayHours = dayActs.reduce((sum, a) => sum + (a.plannedHours || 0), 0);
                         
-                        // Si nos pasamos de 8 horas, empezamos a "recortar" desde el final
+                        // Si el día supera las 8 horas, forzar el efecto cascada hacia el día siguiente
                         while (currentDayHours > 8 && dayActs.length > 0) {
                             let lastIdx = dayActs.length - 1;
                             let lastTask = dayActs[lastIdx];
                             let excess = currentDayHours - 8;
                             
-                            // Si la última tarea es más grande que el exceso, la cortamos
+                            // Si la tarea es más grande que el exceso, la cortamos (fraccionamiento)
                             if (lastTask.plannedHours > excess) {
-                                let partToPush = excess;
-                                lastTask.plannedHours -= partToPush;
-                                
-                                // Creamos el clon del residuo para el siguiente día
-                                pendingTasks.push({...lastTask, id: Date.now() + Math.random(), plannedHours: partToPush, splitText: `Fracción: ${partToPush}h`});
+                                let originalPlanned = lastTask.plannedHours;
+                                lastTask.plannedHours = originalPlanned - excess; 
+                                pendingTasks.push({...lastTask, id: Date.now() + Math.random(), plannedHours: excess, splitText: `Fracción: ${excess}h`});
                                 currentDayHours = 8;
                             } else {
-                                // Si la tarea entera es menor o igual al exceso, la movemos toda al siguiente
+                                // Si la tarea entera cabe en el exceso, movemos toda la tarea al día siguiente
                                 let popped = dayActs.pop();
                                 currentDayHours -= popped.plannedHours;
                                 pendingTasks.push(popped);
@@ -1081,11 +1081,10 @@
                         
                         await saveDayData(iterKey, dayActs);
                         
-                        if (pendingTasks.length > 0) {
-                            iterDate = getNextValidDate(iterDate.getFullYear(), iterDate.getMonth(), iterDate.getDate());
-                        }
+                        // Mover iteración al calendario del día siguiente natural
+                        iterDate.setDate(iterDate.getDate() + 1);
                     }
-                    showToast("Cascada ajustada: Reprogramadas sin desbordar el plan.");
+                    showToast("Cascada aplicada secuencialmente día a día.");
                 } catch (e) { 
                     console.error(e);
                     showToast("Error en cascada.", "error"); 
