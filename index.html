@@ -1022,54 +1022,73 @@
                     const currentKey = `${getSelectedDateKey()}_${selectedStaff.value}`;
                     let currentActs = dbData.value[currentKey] ? [...dbData.value[currentKey]] : [];
                     
-                    const incomplete = currentActs.filter(a => !a.completed && !a.rolledOver && !a.frozen && a.assignedBy === activeSenior.value);
-                    if(incomplete.length === 0) {
-                        showToast("No tienes tareas para reprogramar.");
-                        isProcessingRollover.value = false; return;
-                    }
-
-                    let tasksToPush = incomplete.map(t => {
-                        let carryOver = Math.max(0, (t.plannedHours || 0) - (t.actualHours || 0));
-                        const previousNotes = t.deviationReason ? t.deviationReason.replace(/\[Reprogramada del .*?\]\s*/g, '') : '';
-                        return { ...t, id: Date.now() + Math.floor(Math.random() * 10000), plannedHours: carryOver, actualHours: 0, completed: false, rolledOver: false, frozen: false, deviationReason: `[Reprogramada del ${getSelectedDateKey()}] ${previousNotes}`.trim() };
-                    });
-
+                    // 1. Identificar tareas a mover (las del Senior actual)
+                    let tasksToMove = currentActs.filter(a => !a.completed && !a.rolledOver && !a.frozen && a.assignedBy === activeSenior.value);
+                    
+                    // 2. Marcar originales como movidas
                     currentActs = currentActs.map(t => {
-                        if(!t.completed && !t.rolledOver && !t.frozen && t.assignedBy === activeSenior.value) {
-                            return { ...t, rolledOver: true, deviationReason: (t.deviationReason ? t.deviationReason + " | " : "") + "Pasada al día siguiente." };
+                        if(!t.completed && !t.rolledOver && !t.frozen && a.assignedBy === activeSenior.value) {
+                            return { ...t, rolledOver: true, deviationReason: "Reprogramada al siguiente día." };
                         }
                         return t;
                     });
                     await saveDayData(currentKey, currentActs);
 
+                    // 3. Cola de tareas: primero las que elegiste (integras), luego las que se desplacen
+                    let pendingTasks = tasksToMove.map(t => ({
+                        ...t, 
+                        id: Date.now() + Math.random(), 
+                        originalId: t.originalId || t.id,
+                        rolledOver: false
+                    }));
+
                     let iterDate = getNextValidDate(currentYear.value, currentMonth.value, selectedDay.value);
-                    let maxLoops = 30; 
-                    
-                    while(tasksToPush.length > 0 && maxLoops > 0) {
+                    let maxLoops = 30; // Evitar bucles infinitos
+
+                    while (pendingTasks.length > 0 && maxLoops > 0) {
                         maxLoops--;
                         let iterKey = `${iterDate.getFullYear()}-${String(iterDate.getMonth()+1).padStart(2,'0')}-${String(iterDate.getDate()).padStart(2,'0')}_${selectedStaff.value}`;
-                        let iterActs = dbData.value[iterKey] ? [...dbData.value[iterKey]] : [];
+                        let dayActs = dbData.value[iterKey] ? [...dbData.value[iterKey]] : [];
                         
-                        iterActs = [...tasksToPush, ...iterActs];
-                        tasksToPush = []; 
-                        
-                        let activePlannedSum = iterActs.reduce((sum, a) => sum + (!a.rolledOver ? (a.plannedHours || 0) : 0), 0);
-                        while(activePlannedSum > 8 && iterActs.length > 1) {
-                            let lastPendingIdx = -1;
-                            for (let i = iterActs.length - 1; i >= 0; i--) {
-                                if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
+                        let currentDayHours = dayActs.reduce((sum, a) => sum + (a.plannedHours || 0), 0);
+                        let nextDayPending = []; // Tareas que se desplazan de este día al siguiente
+
+                        // Procesamos la cola
+                        while (pendingTasks.length > 0) {
+                            let task = pendingTasks.shift();
+                            let spaceAvailable = 8 - currentDayHours;
+
+                            if (spaceAvailable >= task.plannedHours) {
+                                // Caso A: Cabe completa en el día
+                                dayActs.push(task);
+                                currentDayHours += task.plannedHours;
+                            } else if (spaceAvailable > 0) {
+                                // Caso B: Corte Fraccionario (Llenamos a 8h y el resto al siguiente)
+                                let partToKeep = spaceAvailable;
+                                let partToPush = task.plannedHours - spaceAvailable;
+                                
+                                dayActs.push({...task, plannedHours: partToKeep, splitText: `Fracción: ${partToKeep}h`});
+                                
+                                // El resto se convierte en una nueva tarea para la siguiente iteración
+                                nextDayPending.push({...task, plannedHours: partToPush, id: Date.now() + Math.random()});
+                                currentDayHours = 8;
+                            } else {
+                                // Caso C: El día está lleno, pasa completa al siguiente
+                                nextDayPending.push(task);
                             }
-                            if (lastPendingIdx !== -1) {
-                                let popped = iterActs.splice(lastPendingIdx, 1)[0];
-                                activePlannedSum -= (popped.plannedHours || 0);
-                                tasksToPush.unshift(popped); 
-                            } else break;
                         }
-                        await saveDayData(iterKey, iterActs);
-                        if (tasksToPush.length > 0) iterDate = getNextValidDate(iterDate.getFullYear(), iterDate.getMonth(), iterDate.getDate());
+
+                        // Guardamos el día procesado
+                        await saveDayData(iterKey, dayActs);
+                        
+                        // Si quedaron tareas, preparamos el siguiente día
+                        pendingTasks = nextDayPending;
+                        if (pendingTasks.length > 0) {
+                            iterDate = getNextValidDate(iterDate.getFullYear(), iterDate.getMonth(), iterDate.getDate());
+                        }
                     }
-                    showToast("Tareas reprogramadas exitosamente.");
-                } catch (e) { showToast("Error al reprogramar.", "error"); }
+                    showToast("Cascada completada: Horas repartidas respetando las 8h diarias.");
+                } catch (e) { showToast("Error en cascada.", "error"); }
                 isProcessingRollover.value = false;
             };
 
