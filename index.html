@@ -483,6 +483,37 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- INICIO: TAREAS FUERA DE LO PLANEADO (STAFF) -->
+                    <div class="space-y-3 pt-4 mt-4 border-t border-slate-800">
+                        <button @click="showUnplannedForm = !showUnplannedForm" class="w-full flex justify-between items-center bg-slate-900 hover:bg-slate-800 border border-slate-800 p-3 rounded-xl transition-colors">
+                            <span class="font-bold text-slate-300 text-xs uppercase tracking-wider">➕ Añadir actividad fuera de lo planeado</span>
+                            <span class="text-slate-400">{{ showUnplannedForm ? '▼' : '▶' }}</span>
+                        </button>
+                        
+                        <form v-if="showUnplannedForm" @submit.prevent="addUnplannedActivity" class="bg-slate-900/50 p-4 rounded-xl border border-slate-800 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                <div class="md:col-span-6">
+                                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Descripción</label>
+                                    <input v-model="unplannedActivity.description" required type="text" placeholder="Ej. Apoyo emergente en auditoría..." class="w-full text-sm bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[44px]">
+                                </div>
+                                <div class="md:col-span-4">
+                                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Categoría</label>
+                                    <select v-model="unplannedActivity.subcategory" required class="w-full text-sm bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[44px]">
+                                        <option v-for="cat in subcategoriesList" :key="cat" :value="cat">{{ cat }}</option>
+                                    </select>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Horas Reales</label>
+                                    <input v-model.number="unplannedActivity.actualHours" required type="number" step="0.5" min="0.5" class="w-full text-sm bg-slate-950 border border-slate-800 rounded-xl p-3 text-white focus:ring-2 focus:ring-indigo-500 text-center font-bold min-h-[44px]">
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-4 rounded-xl text-xs transition-colors shadow-md flex items-center justify-center gap-2 min-h-[44px]">
+                                <span>➕ Registrar Actividad Extra</span>
+                            </button>
+                        </form>
+                    </div>
+                    <!-- FIN: TAREAS FUERA DE LO PLANEADO (STAFF) -->
                 </div>
             </div>
         </div>
@@ -959,6 +990,34 @@
             // Formularios Diarios
             const newActivity = ref({ description: '', subcategory: 'Auditoría', plannedHours: 4 });
             const subcategoriesList = ['Auditoría', 'Cumplimiento Legal', 'Cursos', 'Reuniones de auditoría', 'Reuniones de cumplimiento', 'Otras reuniones', 'Disponible'];
+
+            // Formulario de Tareas Extra (Staff)
+            const showUnplannedForm = ref(false);
+            const unplannedActivity = ref({ description: '', subcategory: 'Auditoría', actualHours: 1 });
+
+            const addUnplannedActivity = async () => {
+                const key = `${getSelectedDateKey()}_${selectedStaff.value}`;
+                const acts = dbData.value[key] ? [...dbData.value[key]] : [];
+                const newId = Date.now();
+                acts.push({
+                    id: newId, 
+                    originalId: newId, 
+                    description: unplannedActivity.value.description,
+                    subcategory: unplannedActivity.value.subcategory, 
+                    plannedHours: 0, // 0 horas planeadas porque es una tarea extra
+                    actualHours: unplannedActivity.value.actualHours, 
+                    completed: true, // Se marca como cumplida inmediatamente
+                    rolledOver: false, 
+                    frozen: false, 
+                    deviationReason: 'Actividad extra no planeada',
+                    assignedBy: 'Staff'
+                });
+                unplannedActivity.value.description = '';
+                unplannedActivity.value.actualHours = 1;
+                showUnplannedForm.value = false; // Cerramos el desplegable
+                await saveDayData(key, acts);
+                showToast("Actividad extra registrada exitosamente.");
+            };
 
             const addActivity = async () => {
                 const key = `${getSelectedDateKey()}_${selectedStaff.value}`;
@@ -1537,6 +1596,7 @@
                 role, selectedStaff, staffList, activeMobileTab,
                 currentYear, currentMonth, selectedDay, daysInMonth, blankDays, monthName, formattedSelectedDate,
                 activeActivities, newActivity, subcategoriesList, totalPlannedHours, totalActualHours, remainingHours,
+                showUnplannedForm, unplannedActivity, addUnplannedActivity, // <--- Variables del nuevo form agregadas
                 isCurrentDayRestDay, notification, syncStatus, globalFrozenTasks,
                 
                 authModalOpen, changePwdModalOpen, teamConfigModalOpen, editingSeniors, editingStaff, authForm, changePwdForm, activeSenior, seniorNamesList, isProcessingRollover, myPendingActivitiesCount,
