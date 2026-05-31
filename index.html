@@ -666,26 +666,33 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tasa de Cumplimiento</p>
-                        <p class="text-2xl font-black text-white mt-1">{{ aggCompliancePercentage }}%</p>
-                        <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-                            <div class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full" :style="{ width: aggCompliancePercentage + '%' }"></div>
+                        <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tasa de Cumplimiento</p>
+                            <div class="flex items-end gap-2 mt-1">
+                                <p class="text-2xl font-black text-white">{{ aggCompliancePercentage }}%</p>
+                                <p class="text-xs font-bold text-slate-400 mb-1">({{ aggCompletedTasks }} de {{ aggTotalTasks }} tareas)</p>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                <div class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full" :style="{ width: aggCompliancePercentage + '%' }"></div>
+                            </div>
+                        </div>
+                        <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horas de Trabajo</p>
+                            <div class="flex items-end gap-2 mt-1">
+                                <p class="text-2xl font-black text-indigo-400">{{ aggTotalActualHours }}h</p>
+                                <p class="text-xs font-bold text-slate-500 mb-1 uppercase tracking-widest">Reales</p>
+                            </div>
+                            <p class="text-[10px] font-bold text-slate-400 mt-2 border-t border-slate-800 pt-1">Vs. {{ aggTotalPlannedHours }}h Planeadas</p>
+                        </div>
+                        <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Foco Auditoría</p>
+                            <p class="text-2xl font-black text-cyan-400 mt-1">{{ aggAuditFocusRatio }}%</p>
+                        </div>
+                        <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Foco Cumplimiento</p>
+                            <p class="text-2xl font-black text-amber-400 mt-1">{{ aggComplianceFocusRatio }}%</p>
                         </div>
                     </div>
-                    <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Horas de Trabajo Reales</p>
-                        <p class="text-2xl font-black text-indigo-400 mt-1">{{ aggTotalActualHours }} h</p>
-                    </div>
-                    <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Foco Auditoría</p>
-                        <p class="text-2xl font-black text-cyan-400 mt-1">{{ aggAuditFocusRatio }}%</p>
-                    </div>
-                    <div class="border border-slate-800 p-4 rounded-xl bg-slate-900/40">
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Foco Cumplimiento</p>
-                        <p class="text-2xl font-black text-amber-400 mt-1">{{ aggComplianceFocusRatio }}%</p>
-                    </div>
-                </div>
 
                 <div class="space-y-4 pt-4 border-t border-slate-800">
                     <h4 class="font-bold text-slate-200 text-xs uppercase tracking-wider">Distribución de Horas</h4>
@@ -1492,18 +1499,39 @@
             // Analytics Computeds (Simplified logic)
             const aggActivities = computed(() => {
                 let allActs = [];
+                
+                // Generar fechas de la semana (Lunes a Domingo) del día seleccionado
+                const weekDates = [];
+                if (analyticsTimeRange.value === 'weekly') {
+                    const curr = new Date(currentYear.value, currentMonth.value, selectedDay.value);
+                    const first = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1);
+                    for (let i = 0; i < 7; i++) {
+                        const tempDate = new Date(currentYear.value, currentMonth.value, first + i);
+                        weekDates.push(`${tempDate.getFullYear()}-${String(tempDate.getMonth() + 1).padStart(2, '0')}-${String(tempDate.getDate()).padStart(2, '0')}`);
+                    }
+                }
+
                 Object.keys(dbData.value).forEach(k => {
                     const [d, s] = k.split('_');
                     if (analyticsStaffFilter.value === 'all' || s === selectedStaff.value) {
                         if (analyticsTimeRange.value === 'daily' && d === getSelectedDateKey()) allActs.push(...dbData.value[k]);
                         else if (analyticsTimeRange.value === 'monthly' && d.startsWith(`${currentYear.value}-${String(currentMonth.value + 1).padStart(2, '0')}`)) allActs.push(...dbData.value[k]);
-                        // Weekly omitted for brevity, handled similar
+                        else if (analyticsTimeRange.value === 'weekly' && weekDates.includes(d)) allActs.push(...dbData.value[k]);
                     }
                 });
                 return allActs;
             });
+            
             const aggTotalActualHours = computed(() => aggActivities.value.reduce((s, a) => s + (a.actualHours || 0), 0));
-            const aggCompliancePercentage = computed(() => { const v = aggActivities.value.filter(a=>!a.frozen).length; return v===0?100:Math.round((aggActivities.value.filter(a=>a.completed).length/v)*100); });
+            const aggTotalPlannedHours = computed(() => aggActivities.value.reduce((s, a) => s + (a.plannedHours || 0), 0));
+            
+            const aggTotalTasks = computed(() => aggActivities.value.filter(a => !a.frozen).length);
+            const aggCompletedTasks = computed(() => aggActivities.value.filter(a => !a.frozen && a.completed).length);
+            
+            const aggCompliancePercentage = computed(() => { 
+                return aggTotalTasks.value === 0 ? 100 : Math.round((aggCompletedTasks.value / aggTotalTasks.value) * 100); 
+            });
+            
             const aggAuditFocusRatio = computed(() => { const v = aggActivities.value.filter(a=>a.subcategory==='Auditoría').reduce((s, a) => s + (a.actualHours || 0), 0); return aggTotalActualHours.value===0?0:Math.round((v/aggTotalActualHours.value)*100); });
             const aggComplianceFocusRatio = computed(() => { const v = aggActivities.value.filter(a=>a.subcategory==='Cumplimiento Legal').reduce((s, a) => s + (a.actualHours || 0), 0); return aggTotalActualHours.value===0?0:Math.round((v/aggTotalActualHours.value)*100); });
             
@@ -1610,7 +1638,7 @@
                 exportCSVForExcel, exportData, importData, hasActivities, getDayClass, getActivityDotClass, getCategoryBadgeClass, getCategoryColorCircle,
                 
                 isRestDay, // Restored logic reference
-                analyticsTimeRange, analyticsStaffFilter, aggActivities, aggTotalActualHours, aggCompliancePercentage, aggAuditFocusRatio, aggComplianceFocusRatio, getAggPlannedWidth, getAggActualWidth, getAggSubcategoryPlannedHours, getAggSubcategoryActualHours
+                analyticsTimeRange, analyticsStaffFilter, aggActivities, aggTotalActualHours, aggTotalPlannedHours, aggTotalTasks, aggCompletedTasks, aggCompliancePercentage, aggAuditFocusRatio, aggComplianceFocusRatio, getAggPlannedWidth, getAggActualWidth, getAggSubcategoryPlannedHours, getAggSubcategoryActualHours
             };
         }
     }).mount('#app');
