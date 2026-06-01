@@ -397,19 +397,25 @@
                                         <p v-else class="text-sm font-semibold text-slate-200 px-1.5 py-1" :class="act.completed ? 'line-through text-slate-500' : ''">{{ act.description }}</p>
 
                                         <div class="text-xs text-slate-400 flex items-center gap-2 flex-wrap px-1.5">
-                                            <div v-if="canDeleteActivity(act)" class="flex items-center gap-1 group relative bg-transparent border border-transparent hover:border-slate-700 hover:bg-slate-900/50 focus-within:border-amber-500 focus-within:bg-slate-950 px-1 py-0.5 rounded transition-all cursor-text">
-                                                <span>Plan:</span>
-                                                <input type="number" step="0.5" min="0.5" v-model.number="act.plannedHours" @change="saveToStorage" class="w-10 text-slate-200 font-bold bg-transparent focus:outline-none text-center appearance-none m-0 p-0">
-                                                <span>h</span>
-                                                <span class="text-[9px] pointer-events-none opacity-0 group-hover:opacity-100 text-amber-500">✏️</span>
-                                            </div>
-                                            <span v-else class="py-1">Plan: <strong class="text-slate-200">{{ act.plannedHours }}h</strong></span>
+    <div v-if="canDeleteActivity(act)" class="flex items-center gap-1 group relative bg-transparent border border-transparent hover:border-slate-700 hover:bg-slate-900/50 focus-within:border-amber-500 focus-within:bg-slate-950 px-1 py-0.5 rounded transition-all cursor-text">
+        <span>Plan:</span>
+        <input type="number" step="0.5" min="0.5" v-model.number="act.plannedHours" @change="saveToStorage" class="w-10 text-slate-200 font-bold bg-transparent focus:outline-none text-center appearance-none m-0 p-0">
+        <span>h</span>
+        <span class="text-[9px] pointer-events-none opacity-0 group-hover:opacity-100 text-amber-500">✏️</span>
+    </div>
+    <span v-else class="py-1">Plan: <strong class="text-slate-200">{{ act.plannedHours }}h</strong></span>
 
-                                            <span v-if="act.actualHours > 0">| Real: <strong :class="act.actualHours > act.plannedHours ? 'text-amber-400' : 'text-indigo-400'">{{ act.actualHours }}h</strong></span>
-                                            <span v-if="act.completed" class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">✔️ Cumplida</span>
-                                            <span v-if="act.frozen && !act.completed" class="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">❄️ Congelada</span>
-                                            <span v-if="act.rolledOver" class="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">🔄 Pasó al sig. día</span>
-                                        </div>
+    <span v-if="act.actualHours > 0">| Real: <strong :class="act.actualHours > act.plannedHours ? 'text-amber-400' : 'text-indigo-400'">{{ act.actualHours }}h</strong></span>
+    
+    <button v-if="canDeleteActivity(act) && !act.completed && !act.rolledOver" @click.prevent="toggleLock(act)" :class="act.locked ? 'bg-rose-500/20 text-rose-400 border-rose-500/30 shadow-inner' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'" class="text-[9px] border px-1.5 py-0.5 rounded uppercase font-bold tracking-wider transition-colors ml-1" :title="act.locked ? 'Desbloquear cascada' : 'Bloquear para que no se mueva en cascada'">
+        {{ act.locked ? '🔒 Fija' : '🔓 Movible' }}
+    </button>
+    <span v-else-if="act.locked && !act.completed && !act.rolledOver" class="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider ml-1">🔒 Fija</span>
+
+    <span v-if="act.completed" class="text-[9px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">✔️ Cumplida</span>
+    <span v-if="act.frozen && !act.completed" class="text-[9px] bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">❄️ Congelada</span>
+    <span v-if="act.rolledOver" class="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">🔄 Pasó al sig. día</span>
+</div>
 
                                         <details v-if="act.deviationReason" class="mt-2 px-1.5 group">
                                             <summary class="text-[10px] text-amber-400 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 px-2 py-1 rounded border border-amber-900/40 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
@@ -1106,6 +1112,12 @@
                 showToast("Actividad eliminada.", "error");
             };
 
+            const toggleLock = async (actCopy) => {
+                actCopy.locked = !actCopy.locked;
+                await saveToStorage();
+                showToast(actCopy.locked ? "🔒 Actividad fijada (No se moverá en cascada)." : "🔓 Actividad desbloqueada.");
+            };
+
             const setTaskStatus = async (act, status) => {
                 if (status === 'pending') { act.completed = false; act.frozen = false; } 
                 else if (status === 'completed') { act.completed = true; act.frozen = false; if (act.actualHours === 0) act.actualHours = act.plannedHours; } 
@@ -1173,7 +1185,8 @@
                         while(activePlannedSum > 8 && iterActs.length > 1) {
                         let lastPendingIdx = -1;
                         for (let i = iterActs.length - 1; i >= 0; i--) {
-                            if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
+                            // Se añade && !iterActs[i].locked para ignorar tareas fijadas
+                            if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver && !iterActs[i].locked) { lastPendingIdx = i; break; }
                         }
                         
                         if (lastPendingIdx !== -1) {
@@ -1257,7 +1270,8 @@
                         while (activePlannedSum > 8 && iterActs.length > 1) {
                         let lastPendingIdx = -1;
                         for (let i = iterActs.length - 1; i >= 0; i--) {
-                            if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver) { lastPendingIdx = i; break; }
+                            // Se añade && !iterActs[i].locked para ignorar tareas fijadas
+                            if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver && !iterActs[i].locked) { lastPendingIdx = i; break; }
                         }
                         
                         if (lastPendingIdx !== -1) {
@@ -1718,7 +1732,7 @@
                 submitBoardForm, confirmBoardActivity, canEditBoardAct, updateBoardAct, deleteBoardActivity, moveBoardActivity, formatDateShort,
 
                 attemptSeniorLogin, loginSenior, logoutSenior, updatePassword, openTeamConfig, addEditSenior, addEditStaff, saveTeamConfig, executeRollover, resumeFrozenTask, revertResumedTask,
-                selectDay, prevMonth, nextMonth, addActivity, deleteActivity, canDeleteActivity, setTaskStatus, saveToStorage,
+                selectDay, prevMonth, nextMonth, addActivity, deleteActivity, canDeleteActivity, toggleLock, setTaskStatus, saveToStorage,
                 exportCSVForExcel, exportData, importData, hasActivities, getDayClass, getActivityDotClass, getCategoryBadgeClass, getCategoryColorCircle,
                 
                 isRestDay, // Restored logic reference
