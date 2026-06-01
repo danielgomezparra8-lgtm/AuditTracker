@@ -619,7 +619,10 @@
                                 <td colspan="8" class="p-8 text-center text-slate-500 border-dashed">No hay tareas que coincidan con los filtros seleccionados.</td>
                             </tr>
                             <tr v-for="act in boardActivities" :key="act.parentKey + act.id" class="hover:bg-slate-900/70 transition-colors">
-                                <td class="p-3 font-bold text-slate-300 whitespace-nowrap">{{ formatDateShort(act.date) }}</td>
+                                <td class="p-3 font-bold text-slate-300 whitespace-nowrap">
+    <input v-if="canEditBoardAct(act)" type="date" v-model="act.newDate" @change="moveBoardActivity(act)" class="bg-transparent text-xs text-white border border-transparent hover:border-slate-700 focus:border-cyan-500 focus:bg-slate-950 px-1 py-1 rounded outline-none cursor-pointer" title="Cambiar fecha">
+    <span v-else>{{ formatDateShort(act.date) }}</span>
+</td>
                                 <td class="p-3 font-semibold text-indigo-300">{{ act.staff }}</td>
                                 <td class="p-3">
                                     <input v-if="canEditBoardAct(act)" v-model="act.description" @change="updateBoardAct(act)" class="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-cyan-500 focus:bg-slate-950 px-2 py-1 rounded text-slate-200" title="Editar texto">
@@ -911,7 +914,8 @@
                         if (boardFilters.value.status === 'frozen' && !act.frozen) return;
                         if (boardFilters.value.status === 'rolledOver' && !act.rolledOver) return;
 
-                        result.push({ ...act, date: dateStr, staff: staffName, parentKey: key });
+                        // Agregamos newDate para el input editable
+                        result.push({ ...act, date: dateStr, newDate: dateStr, staff: staffName, parentKey: key });
                     });
                 });
                 
@@ -941,6 +945,31 @@
                 acts = acts.filter(a => a.id !== actCopy.id);
                 await saveDayData(actCopy.parentKey, acts);
                 showToast("Actividad eliminada del tablero.");
+            };
+
+            const moveBoardActivity = async (actCopy) => {
+                if (!actCopy.newDate || actCopy.date === actCopy.newDate) return;
+
+                const oldKey = actCopy.parentKey;
+                const newKey = `${actCopy.newDate}_${actCopy.staff}`;
+
+                // Copiar las listas actuales de ambos días (el antiguo y el destino)
+                let oldActs = dbData.value[oldKey] ? [...dbData.value[oldKey]] : [];
+                let newActs = dbData.value[newKey] ? [...dbData.value[newKey]] : [];
+
+                // Buscar y extraer la tarea de la lista antigua
+                const actIndex = oldActs.findIndex(a => a.id === actCopy.id);
+                if (actIndex === -1) return;
+                const actToMove = oldActs.splice(actIndex, 1)[0];
+
+                // Añadir a la nueva fecha
+                newActs.push(actToMove);
+
+                // Guardar los cambios en ambas fechas en la base de datos
+                await saveDayData(oldKey, oldActs);
+                await saveDayData(newKey, newActs);
+                
+                showToast("📅 Actividad movida a nueva fecha exitosamente.");
             };
 
             // ---- SINCRONIZACIÓN COLECTIVA (NUEVO MOTOR) ----
@@ -1686,7 +1715,7 @@
                 
                 // Tablero variables
                 boardFilters, boardForm, overbookModal, boardActivities, 
-                submitBoardForm, confirmBoardActivity, canEditBoardAct, updateBoardAct, deleteBoardActivity, formatDateShort,
+                submitBoardForm, confirmBoardActivity, canEditBoardAct, updateBoardAct, deleteBoardActivity, moveBoardActivity, formatDateShort,
 
                 attemptSeniorLogin, loginSenior, logoutSenior, updatePassword, openTeamConfig, addEditSenior, addEditStaff, saveTeamConfig, executeRollover, resumeFrozenTask, revertResumedTask,
                 selectDay, prevMonth, nextMonth, addActivity, deleteActivity, canDeleteActivity, setTaskStatus, saveToStorage,
