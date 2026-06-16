@@ -1224,6 +1224,22 @@
                         iterActs = [...tasksToPush, ...iterActs];
                         tasksToPush = []; 
                         
+                        // --- INICIO FUSIÓN DE FRAGMENTOS ---
+                        let mergedActs = [];
+                        for (let act of iterActs) {
+                            if (act.originalId) {
+                                let existing = mergedActs.find(a => a.originalId === act.originalId && !a.completed && !a.frozen && !a.rolledOver);
+                                if (existing) {
+                                    existing.plannedHours += (act.plannedHours || 0);
+                                    existing.history = [...(existing.history || []), `🧩 Fragmentos reunificados (+${act.plannedHours}h).`];
+                                    continue;
+                                }
+                            }
+                            mergedActs.push(act);
+                        }
+                        iterActs = mergedActs;
+                        // --- FIN FUSIÓN DE FRAGMENTOS ---
+
                         let activePlannedSum = iterActs.reduce((sum, a) => sum + (!a.rolledOver ? (a.plannedHours || 0) : 0), 0);
                         while(activePlannedSum > 8 && iterActs.length > 1) {
                         let lastPendingIdx = -1;
@@ -1304,6 +1320,23 @@
                         
                         iterActs = [...tasksToPush, ...iterActs];
                         tasksToPush = [];
+                        
+                        // --- INICIO FUSIÓN DE FRAGMENTOS ---
+                        let mergedActs = [];
+                        for (let act of iterActs) {
+                            if (act.originalId) {
+                                let existing = mergedActs.find(a => a.originalId === act.originalId && !a.completed && !a.frozen && !a.rolledOver);
+                                if (existing) {
+                                    existing.plannedHours += (act.plannedHours || 0);
+                                    existing.history = [...(existing.history || []), `🧩 Fragmentos reunificados (+${act.plannedHours}h).`];
+                                    continue;
+                                }
+                            }
+                            mergedActs.push(act);
+                        }
+                        iterActs = mergedActs;
+                        // --- FIN FUSIÓN DE FRAGMENTOS ---
+
                         let activePlannedSum = iterActs.reduce((sum, a) => sum + (!a.rolledOver ? (a.plannedHours || 0) : 0), 0);
                         
                         while (activePlannedSum > 8 && iterActs.length > 1) {
