@@ -417,15 +417,29 @@
     <span v-if="act.rolledOver" class="text-[9px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase font-bold tracking-wider">🔄 Pasó al sig. día</span>
 </div>
 
-                                        <details v-if="act.deviationReason" class="mt-2 px-1.5 group">
-                                            <summary class="text-[10px] text-amber-400 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 px-2 py-1 rounded border border-amber-900/40 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
-                                                <span>💬 Nota del Asistente</span>
-                                                <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
-                                            </summary>
-                                            <div class="mt-1.5 p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-300 shadow-inner whitespace-normal border-l-2 border-l-amber-500">
-                                                {{ act.deviationReason }}
-                                            </div>
-                                        </details>
+                                        <div v-if="act.deviationReason || (act.history && act.history.length > 0)" class="mt-2 px-1.5 flex flex-col gap-1.5">
+                                            <details v-if="act.deviationReason" class="group">
+                                                <summary class="text-[10px] text-amber-400 hover:text-amber-300 bg-amber-950/20 hover:bg-amber-950/40 px-2 py-1 rounded border border-amber-900/40 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
+                                                    <span>💬 Nota del Asistente</span>
+                                                    <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
+                                                </summary>
+                                                <div class="mt-1.5 p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-300 shadow-inner whitespace-normal border-l-2 border-l-amber-500">
+                                                    {{ act.deviationReason }}
+                                                </div>
+                                            </details>
+                                            <details v-if="act.history && act.history.length > 0" class="group">
+                                                <summary class="text-[10px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/20 hover:bg-cyan-950/40 px-2 py-1 rounded border border-cyan-900/40 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
+                                                    <span>📜 Historial del Sistema ({{ act.history.length }})</span>
+                                                    <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
+                                                </summary>
+                                                <div class="mt-1.5 p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-300 shadow-inner whitespace-normal border-l-2 border-l-cyan-500 space-y-1">
+                                                    <div v-for="(h, idx) in act.history" :key="idx" class="flex items-start gap-1.5">
+                                                        <span class="text-[8px] mt-0.5 opacity-60">🔹</span>
+                                                        <span>{{ h }}</span>
+                                                    </div>
+                                                </div>
+                                            </details>
+                                        </div>
                                         </div>
                                 </div>
                                 <button v-if="canDeleteActivity(act)" @click="deleteActivity(act.id)" class="text-xs text-rose-400 bg-rose-950/20 hover:bg-rose-950/50 px-3 py-2 rounded-lg border border-rose-900/40 font-bold shrink-0">🗑️</button>
@@ -477,11 +491,25 @@
                                         </div>
                                         <p class="text-sm font-semibold text-slate-100" :class="act.completed ? 'line-through text-slate-500' : ''">{{ act.description }}</p>
                                         
-                                        <div v-if="act.frozen || (!act.completed && !act.rolledOver) || (act.completed && act.actualHours > act.plannedHours) || act.deviationReason" class="mt-3 pt-3 border-t" :class="act.completed ? 'border-emerald-500/20' : 'border-slate-800'">
-                                            <label class="block text-[10px] font-bold uppercase mb-1.5" :class="act.frozen ? 'text-cyan-400' : 'text-slate-400'">
-                                                {{ act.frozen ? '❄️ Motivo de congelación (Requerido):' : '📝 Notas / Historial:' }}
-                                            </label>
-                                            <input type="text" v-model="act.deviationReason" @change="saveToStorage" placeholder="Explica aquí el motivo..." class="w-full bg-slate-950/50 border rounded-lg p-2.5 text-xs text-white" :class="act.frozen && !act.deviationReason ? 'border-rose-500' : 'border-slate-800'" :disabled="act.rolledOver">
+                                        <div class="mt-3 pt-3 border-t space-y-2" :class="act.completed ? 'border-emerald-500/20' : 'border-slate-800'" v-if="act.frozen || (!act.completed && !act.rolledOver) || (act.completed && act.actualHours > act.plannedHours) || act.deviationReason || (act.history && act.history.length > 0)">
+                                            <div v-if="act.frozen || (!act.completed && !act.rolledOver) || (act.completed && act.actualHours > act.plannedHours) || act.deviationReason">
+                                                <label class="block text-[10px] font-bold uppercase mb-1.5" :class="act.frozen ? 'text-cyan-400' : 'text-slate-400'">
+                                                    {{ act.frozen ? '❄️ Motivo de congelación (Requerido):' : '📝 Notas del Staff:' }}
+                                                </label>
+                                                <input type="text" v-model="act.deviationReason" @change="saveToStorage" placeholder="Explica aquí el motivo..." class="w-full bg-slate-950/50 border rounded-lg p-2.5 text-xs text-white" :class="act.frozen && !act.deviationReason ? 'border-rose-500' : 'border-slate-800'" :disabled="act.rolledOver">
+                                            </div>
+                                            <details v-if="act.history && act.history.length > 0" class="group mt-1">
+                                                <summary class="text-[10px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/20 hover:bg-cyan-950/40 px-2 py-1.5 rounded border border-cyan-900/40 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
+                                                    <span>📜 Ver Historial del Sistema ({{ act.history.length }})</span>
+                                                    <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
+                                                </summary>
+                                                <div class="mt-1.5 p-2 bg-slate-950/80 border border-slate-800 rounded-lg text-xs text-slate-300 shadow-inner whitespace-normal border-l-2 border-l-cyan-500 space-y-1">
+                                                    <div v-for="(h, idx) in act.history" :key="idx" class="flex items-start gap-1.5">
+                                                        <span class="text-[8px] mt-0.5 opacity-60">🔹</span>
+                                                        <span>{{ h }}</span>
+                                                    </div>
+                                                </div>
+                                            </details>
                                         </div>
                                     </div>
 
@@ -634,15 +662,29 @@
                                     <input v-if="canEditBoardAct(act)" v-model="act.description" @change="updateBoardAct(act)" class="w-full bg-transparent border border-transparent hover:border-slate-700 focus:border-cyan-500 focus:bg-slate-950 px-2 py-1 rounded text-slate-200" title="Editar texto">
                                     <span v-else class="text-slate-300 px-2">{{ act.description }}</span>
                                     
-                                    <details v-if="act.deviationReason" class="mt-1.5 px-2 group">
-                                        <summary class="text-[9px] text-amber-400 hover:text-amber-300 bg-amber-950/30 px-2 py-1 rounded border border-amber-900/50 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
-                                            <span>💬 Ver Notas del Staff</span>
-                                            <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
-                                        </summary>
-                                        <div class="mt-2 p-2.5 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-300 leading-relaxed shadow-inner whitespace-normal border-l-2 border-l-amber-500">
-                                            {{ act.deviationReason }}
-                                        </div>
-                                    </details>
+                                    <div v-if="act.deviationReason || (act.history && act.history.length > 0)" class="mt-1.5 px-2 flex flex-col gap-1">
+                                        <details v-if="act.deviationReason" class="group">
+                                            <summary class="text-[9px] text-amber-400 hover:text-amber-300 bg-amber-950/30 px-2 py-1 rounded border border-amber-900/50 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
+                                                <span>💬 Notas del Staff</span>
+                                                <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
+                                            </summary>
+                                            <div class="mt-1.5 p-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-300 leading-relaxed shadow-inner whitespace-normal border-l-2 border-l-amber-500">
+                                                {{ act.deviationReason }}
+                                            </div>
+                                        </details>
+                                        <details v-if="act.history && act.history.length > 0" class="group">
+                                            <summary class="text-[9px] text-cyan-400 hover:text-cyan-300 bg-cyan-950/30 px-2 py-1 rounded border border-cyan-900/50 cursor-pointer inline-flex items-center gap-1 font-bold select-none list-none [&::-webkit-details-marker]:hidden outline-none transition-colors">
+                                                <span>📜 Historial ({{ act.history.length }})</span>
+                                                <span class="group-open:rotate-180 transition-transform duration-200 inline-block text-[8px]">▼</span>
+                                            </summary>
+                                            <div class="mt-1.5 p-2 bg-slate-950 border border-slate-700 rounded-lg text-xs text-slate-300 leading-relaxed shadow-inner whitespace-normal border-l-2 border-l-cyan-500 space-y-1">
+                                                <div v-for="(h, idx) in act.history" :key="idx" class="flex items-start gap-1.5">
+                                                    <span class="text-[8px] mt-0.5 opacity-60">🔹</span>
+                                                    <span>{{ h }}</span>
+                                                </div>
+                                            </div>
+                                        </details>
+                                    </div>
                                     </td>
                                 <td class="p-3">
                                     <select v-if="canEditBoardAct(act)" v-model="act.subcategory" @change="updateBoardAct(act)" :class="getCategoryBadgeClass(act.subcategory)" class="text-[9px] font-bold px-1.5 py-0.5 rounded uppercase appearance-none cursor-pointer bg-transparent border-0 ring-1 ring-slate-700">
@@ -895,6 +937,7 @@
                     rolledOver: false,
                     frozen: false,
                     deviationReason: '',
+                    history: [],
                     assignedBy: activeSenior.value || 'Senior'
                 });
 
@@ -1072,7 +1115,8 @@
                     completed: true, // Se marca como cumplida inmediatamente
                     rolledOver: false, 
                     frozen: false, 
-                    deviationReason: 'Actividad extra no planeada',
+                    deviationReason: '',
+                    history: ['Creada como actividad extra no planeada.'],
                     assignedBy: 'Staff'
                 });
                 unplannedActivity.value.description = '';
@@ -1089,7 +1133,7 @@
                 acts.push({
                     id: newId, originalId: newId, description: newActivity.value.description,
                     subcategory: newActivity.value.subcategory, plannedHours: newActivity.value.plannedHours,
-                    actualHours: 0, completed: false, rolledOver: false, frozen: false, deviationReason: '',
+                    actualHours: 0, completed: false, rolledOver: false, frozen: false, deviationReason: '', history: [],
                     assignedBy: activeSenior.value || 'Senior'
                 });
                 newActivity.value.description = '';
@@ -1158,13 +1202,12 @@
 
                     let tasksToPush = incomplete.map(t => {
                         let carryOver = Math.max(0, (t.plannedHours || 0) - (t.actualHours || 0));
-                        const previousNotes = t.deviationReason ? t.deviationReason.replace(/\[Reprogramada del .*?\]\s*/g, '') : '';
-                        return { ...t, id: Date.now() + Math.floor(Math.random() * 10000), plannedHours: carryOver, actualHours: 0, completed: false, rolledOver: false, frozen: false, deviationReason: `[Reprogramada del ${getSelectedDateKey()}] ${previousNotes}`.trim() };
+                        return { ...t, id: Date.now() + Math.floor(Math.random() * 10000), plannedHours: carryOver, actualHours: 0, completed: false, rolledOver: false, frozen: false, history: [...(t.history || []), `Reprogramada del ${getSelectedDateKey()}`] };
                     });
 
                     currentActs = currentActs.map(t => {
                         if(!t.completed && !t.rolledOver && !t.frozen && t.assignedBy === activeSenior.value) {
-                            return { ...t, rolledOver: true, deviationReason: (t.deviationReason ? t.deviationReason + " | " : "") + "Pasada al día siguiente." };
+                            return { ...t, rolledOver: true, history: [...(t.history || []), "Pasada al día siguiente (Reprogramación)."] };
                         }
                         return t;
                     });
@@ -1185,35 +1228,31 @@
                         while(activePlannedSum > 8 && iterActs.length > 1) {
                         let lastPendingIdx = -1;
                         for (let i = iterActs.length - 1; i >= 0; i--) {
-                            // Se añade && !iterActs[i].locked para ignorar tareas fijadas
                             if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver && !iterActs[i].locked) { lastPendingIdx = i; break; }
                         }
                         
                         if (lastPendingIdx !== -1) {
-                            let overflow = activePlannedSum - 8; // Calculamos cuántas horas sobran
+                            let overflow = activePlannedSum - 8;
                             let targetTask = iterActs[lastPendingIdx];
 
                             if (targetTask.plannedHours > overflow) {
-                                // CASO A: Fraccionar la actividad
                                 let pushedTask = {
                                     ...targetTask,
-                                    id: Date.now() + Math.floor(Math.random() * 10000), // Nuevo ID único
-                                    plannedHours: overflow, // Se lleva solo las horas sobrantes
+                                    id: Date.now() + Math.floor(Math.random() * 10000),
+                                    plannedHours: overflow,
                                     actualHours: 0,
-                                    deviationReason: (targetTask.deviationReason ? targetTask.deviationReason + " | " : "") + "Dividida y desplazada (efecto cascada)."
+                                    history: [...(targetTask.history || []), `Desplazada - Fraccionada (${overflow}h)`]
                                 };
                                 
-                                // Reducimos las horas de la tarea original en el día actual
                                 targetTask.plannedHours -= overflow;
-                                targetTask.deviationReason = (targetTask.deviationReason ? targetTask.deviationReason + " | " : "") + `Se fraccionaron ${overflow}h al sig. día.`;
+                                targetTask.history = [...(targetTask.history || []), `Se fraccionaron ${overflow}h al sig. día por límite de horas.`];
                                 
-                                activePlannedSum = 8; // El día queda cuadrado exactamente en 8 horas
+                                activePlannedSum = 8;
                                 tasksToPush.unshift(pushedTask);
                             } else {
-                                // CASO B: Pasar la actividad completa (es menor o igual al desborde)
                                 let popped = iterActs.splice(lastPendingIdx, 1)[0];
                                 activePlannedSum -= (popped.plannedHours || 0);
-                                popped.deviationReason = (popped.deviationReason ? popped.deviationReason + " | " : "") + "Desplazada completa (efecto cascada).";
+                                popped.history = [...(popped.history || []), "Desplazada completa (efecto cascada)."];
                                 tasksToPush.unshift(popped); 
                             }
                         } else break;
@@ -1234,7 +1273,7 @@
                     if (targetAct) {
                         targetAct.frozen = false;
                         targetAct.rolledOver = true;
-                        targetAct.deviationReason = (targetAct.deviationReason ? targetAct.deviationReason + " | " : "") + `[RETOMADA el ${getSelectedDateKey()}]`;
+                        targetAct.history = [...(targetAct.history || []), `RETOMADA el ${getSelectedDateKey()}`];
                         await saveDayData(frozenTask.parentKey, origActs);
                     }
 
@@ -1249,7 +1288,7 @@
                         completed: false, 
                         rolledOver: false, 
                         frozen: false, 
-                        deviationReason: `[Retomada: Congelada el ${frozenTask.date}] ` + (frozenTask.deviationReason || ''),
+                        history: [...(frozenTask.history || []), `Retomada (Estuvo congelada el ${frozenTask.date})`],
                         isResumed: true,
                         originalFrozenId: frozenTask.id,
                         originalFrozenParentKey: frozenTask.parentKey
@@ -1270,7 +1309,6 @@
                         while (activePlannedSum > 8 && iterActs.length > 1) {
                         let lastPendingIdx = -1;
                         for (let i = iterActs.length - 1; i >= 0; i--) {
-                            // Se añade && !iterActs[i].locked para ignorar tareas fijadas
                             if (!iterActs[i].completed && !iterActs[i].frozen && !iterActs[i].rolledOver && !iterActs[i].locked) { lastPendingIdx = i; break; }
                         }
                         
@@ -1280,28 +1318,26 @@
                             let targetTask = iterActs[lastPendingIdx];
 
                             if (targetTask.plannedHours > overflow) {
-                                // Fraccionar la actividad
                                 let pushedTask = {
                                     ...targetTask,
                                     id: Date.now() + Math.floor(Math.random()*10000),
                                     plannedHours: overflow,
                                     actualHours: 0,
                                     completed: false, rolledOver: false, frozen: false,
-                                    deviationReason: `[Desplazada - Fraccionada] ` + (targetTask.deviationReason || '')
+                                    history: [...(targetTask.history || []), `Desplazada - Fraccionada (Cascada)`]
                                 };
                                 
                                 targetTask.plannedHours -= overflow;
-                                targetTask.deviationReason = (targetTask.deviationReason ? targetTask.deviationReason + " | " : "") + `Se pasaron ${overflow}h al sig. día.`;
+                                targetTask.history = [...(targetTask.history || []), `Se pasaron ${overflow}h al sig. día.`];
                                 
                                 activePlannedSum = 8; 
                                 tasksToPush.unshift(pushedTask);
                             } else {
-                                // Pasar la actividad completa
                                 let popped;
                                 if (isToday) {
                                     popped = { ...iterActs[lastPendingIdx] };
                                     iterActs[lastPendingIdx].rolledOver = true;
-                                    iterActs[lastPendingIdx].deviationReason = (iterActs[lastPendingIdx].deviationReason ? iterActs[lastPendingIdx].deviationReason + " | " : "") + "Desplazada automáticamente.";
+                                    iterActs[lastPendingIdx].history = [...(iterActs[lastPendingIdx].history || []), "Desplazada automáticamente."];
                                 } else {
                                     popped = iterActs.splice(lastPendingIdx, 1)[0];
                                 }
@@ -1311,7 +1347,7 @@
                                     id: Date.now() + Math.floor(Math.random()*10000), 
                                     plannedHours: Math.max(0, (popped.plannedHours || 0) - (popped.actualHours || 0)), 
                                     actualHours: 0, completed: false, rolledOver: false, frozen: false, 
-                                    deviationReason: `[Desplazada] ` + (popped.deviationReason || '') 
+                                    history: [...(popped.history || []), `Desplazada`] 
                                 });
                             }
                         } else break;
@@ -1339,10 +1375,7 @@
                     if (targetAct) {
                         targetAct.frozen = true;
                         targetAct.rolledOver = false;
-                        // Limpiamos la nota automática que se le había puesto al retomarla
-                        if (targetAct.deviationReason) {
-                            targetAct.deviationReason = targetAct.deviationReason.replace(/ \| \[RETOMADA el .*?\]/g, '').replace(/\[RETOMADA el .*?\]/g, '').trim();
-                        }
+                        targetAct.history = [...(targetAct.history || []), `Retoma cancelada el ${getSelectedDateKey()}`];
                         await saveDayData(actCopy.originalFrozenParentKey, origActs);
                     }
                 }
